@@ -11,7 +11,11 @@ import { Input } from "@/components/ui/input";
 import FormField  from './FormField';
 import { z } from "zod";
 import { toast } from "sonner";
+import { auth } from "@/firebase/client";
 import { useRouter } from "next/navigation";
+import { signIn, signUp } from "@/lib/actions/auth.action";
+
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 
 const authFormSchema = (type: FormType) => {
   return z.object({
@@ -35,13 +39,36 @@ const AuthForm = ({ type }: { type: FormType }) => {
 
   const router = useRouter()
   // 2. Define a submit handler.
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       if (type === "sign-up") {
+        const {name, email, password} = values 
+        const userCredentials = await createUserWithEmailAndPassword(auth, email, password)
+        const result = await signUp({
+          uid: userCredentials.user.uid,
+          name: name,
+          email,
+        })
+        if(!result?.success){
+          toast.error(result?.message)
+          return 
+        }
         toast.success('Account created successfully. Please sign in.')
         router.push('/sign-in')
         console.log("SIGN UP", values);
       } else {
+        const {email, password} = values
+
+        const userCredential = await signInWithEmailAndPassword(auth, email, password)
+
+        const idToken = await userCredential.user.getIdToken()
+        if(!idToken){
+          toast.error('Sign in failed')
+          return 
+        }
+        await signIn({
+          email, idToken
+        })
         toast.success('Signed in successfully')
         router.push('/')
       }
@@ -99,7 +126,7 @@ const AuthForm = ({ type }: { type: FormType }) => {
           {isSignIn ? "No account yet?" : "Have an account already?"}{" "}
         </p>
         <Link
-          href={!isSignIn ? "/sign-in" : "sign-up"}
+          href={!isSignIn ? "/sign-in" : "/sign-up"}
           className="font0bold text-user-primary ml-1"
         >
           {!isSignIn ? "Sign-in" : "Sign-up"}{" "}
